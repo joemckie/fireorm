@@ -6,6 +6,7 @@ import { Type } from './';
 import { MetadataStorage } from './MetadataStorage';
 const MockFirebase = require('mock-cloud-firestore');
 import monkeyPatchFirestoreTran from '../test/monkey-patch-firestore-transaction';
+import { Firestore, DocumentReference } from '@google-cloud/firestore';
 
 const store = { metadataStorage: new MetadataStorage() };
 Initialize(null, store);
@@ -16,6 +17,7 @@ class Band {
   name: string;
   formationYear: number;
   lastShow: Date;
+  randomReference?: DocumentReference;
 
   // Todo create fireorm bypass decorator
   @Type(() => Coordinates)
@@ -38,6 +40,7 @@ class BandRepository extends BaseFirestoreRepository<Band> {}
 
 describe('BaseFirestoreRepository', () => {
   let bandRepository: BaseFirestoreRepository<Band> = null;
+  let firestore: Firestore = null;
 
   beforeEach(() => {
     const fixture = Object.assign({}, getFixture());
@@ -45,7 +48,7 @@ describe('BaseFirestoreRepository', () => {
       isNaiveSnapshotListenerEnabled: false,
     });
 
-    const firestore = firebase.firestore();
+    firestore = firebase.firestore();
     monkeyPatchFirestoreTran(firestore);
     Initialize(firestore, store);
     bandRepository = new BandRepository('bands');
@@ -361,6 +364,21 @@ describe('BaseFirestoreRepository', () => {
         .find();
       expect(list.length).to.equal(1);
       expect(list[0].id).to.equal('red-hot-chili-peppers');
+    });
+
+    it.only('must support document references in where methods', async () => {
+      const docRef = firestore.collection('bands').doc('porcupine-tree');
+
+      const band = await bandRepository.findById('porcupine-tree');
+      band.randomReference = docRef;
+      await bandRepository.update(band);
+
+      const byReference = await bandRepository
+        .whereEqualTo('randomReference', docRef)
+        .find();
+
+      expect(byReference.length).to.equal(1);
+      expect(byReference[0].name).to.equal('Porcupine Tree');
     });
   });
 
